@@ -1,1 +1,243 @@
-<!doctype html><title>Sweep Alert</title><h1>Sweep Alert</h1><p>Personal app that checks my Tesla's parking spot against SF street-sweeping schedules.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sweep Alert</title>
+<meta name="description" content="Checks where your car is parked against San Francisco street-sweeping schedules and warns you the night before.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232f6fed'/><path d='M9 22l7-12 7 12' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14161a;--muted:#5d6470;--line:#e3e6eb;--accent:#2f6fed;--warn:#d9480f;--warn-bg:#fff1e8;--ok:#2b8a3e;--ok-bg:#ebf8ee;--radius:14px}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1013;--card:#171a1f;--ink:#eef0f3;--muted:#9aa2ad;--line:#2a2f37;--accent:#5b8dff;--warn:#ff8a4c;--warn-bg:#2d1a10;--ok:#51cf66;--ok-bg:#12261a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header{border-bottom:1px solid var(--line);background:var(--card)}
+header .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.01em;text-decoration:none;color:var(--ink)}
+.logo{width:28px;height:28px;border-radius:8px;background:var(--accent);display:grid;place-items:center}
+nav a{color:var(--muted);text-decoration:none;margin-left:20px;font-size:15px}
+nav a:hover{color:var(--ink)}
+.hero{padding:56px 0 32px}
+.hero h1{font-size:clamp(30px,5vw,46px);line-height:1.1;margin:0 0 14px;letter-spacing:-.02em}
+.hero p{font-size:18px;color:var(--muted);max-width:620px;margin:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:28px 0}
+@media (max-width:760px){.grid{grid-template-columns:1fr}nav a{margin-left:14px}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+.card h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 14px;font-weight:600}
+.status{display:flex;gap:14px;align-items:flex-start}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--muted);margin-top:7px;flex:none}
+.dot.live{background:var(--ok);box-shadow:0 0 0 4px var(--ok-bg)}
+.big{font-size:20px;font-weight:650;margin:0 0 4px}
+.muted{color:var(--muted);font-size:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin-top:16px;font-size:14px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;background:var(--line);color:var(--muted)}
+.steps{margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;padding-left:38px;position:relative;margin-bottom:14px;font-size:15px}
+.steps li:before{content:counter(s);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+#map{height:420px;border-radius:10px;border:1px solid var(--line);z-index:0}
+.tools{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+button{font:inherit;font-size:14px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:9px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.result{margin-top:14px}
+.side{border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:10px}
+.side.here{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.side.warn{background:var(--warn-bg)}
+.side h3{margin:0 0 6px;font-size:16px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.side ul{margin:6px 0 0;padding-left:18px;font-size:14px}
+.next{font-size:14px;margin-top:6px}
+.next b{color:var(--warn)}
+.side:not(.warn) .next b{color:var(--ok)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="./"><span class="logo"><svg width="16" height="16" viewBox="0 0 32 32"><path d="M7 24l9-16 9 16" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Sweep Alert</a>
+  <nav><a href="#status">Status</a><a href="#lookup">Lookup</a><a href="#how">How it works</a><a href="privacy.html">Privacy</a></nav>
+</div></header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Never get a street-sweeping ticket again.</h1>
+    <p>Sweep Alert checks where your car is parked each evening, figures out which side of the street it's on, and pings your phone if that side gets swept tomorrow.</p>
+  </section>
+
+  <div class="grid" id="status">
+    <section class="card">
+      <h2>Vehicle</h2>
+      <div class="status">
+        <span class="dot" id="car-dot"></span>
+        <div>
+          <p class="big" id="car-title">Waiting for vehicle connection</p>
+          <p class="muted" id="car-sub">Live parking location will appear here once the Tesla Fleet API is authorized.</p>
+        </div>
+      </div>
+      <dl class="kv">
+        <dt>Parked on</dt><dd id="car-street">—</dd>
+        <dt>Side</dt><dd id="car-side">—</dd>
+        <dt>Next sweep</dt><dd id="car-next">—</dd>
+        <dt>Last check</dt><dd id="car-checked">—</dd>
+      </dl>
+    </section>
+    <section class="card">
+      <h2>Alerts</h2>
+      <div class="status">
+        <span class="dot live"></span>
+        <div>
+          <p class="big">Nightly check at 7:00 pm</p>
+          <p class="muted">Push notification via ntfy when your side of the block is scheduled for sweeping the next day.</p>
+        </div>
+      </div>
+      <dl class="kv">
+        <dt>Schedule data</dt><dd>City of SF · DataSF <span class="pill">live</span></dd>
+        <dt>Coverage</dt><dd>San Francisco, all posted blocks</dd>
+        <dt>Holidays</dt><dd>Skipped automatically</dd>
+      </dl>
+    </section>
+  </div>
+
+  <section class="card" id="lookup">
+    <h2>Check any block</h2>
+    <p class="muted" style="margin-top:-6px">Tap where a car is parked, on the side of the street it's on. Schedules come straight from the city's open data.</p>
+    <div class="tools">
+      <button class="primary" id="locate">Use my location</button>
+      <span class="muted" id="hint" style="align-self:center"></span>
+    </div>
+    <div id="map"></div>
+    <div class="result" id="result"></div>
+  </section>
+
+  <section class="card" id="how" style="margin-top:20px">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><b>Find the car.</b> Each evening the app asks Tesla's official Fleet API for the car's parked location and heading. Read-only access: it can't unlock, move, or control the car.</li>
+      <li><b>Pick the side of the street.</b> It snaps the location to the nearest block in the city's street-sweeping map and works out the side from GPS position and which way the car is facing.</li>
+      <li><b>Check tomorrow's schedule.</b> Each block side has its own days, weeks of the month, and hours. Holidays are handled.</li>
+      <li><b>Alert.</b> If your side is swept tomorrow you get a push notification with the time window and a map link.</li>
+    </ol>
+  </section>
+</main>
+
+<footer><div class="wrap">
+  <span>Sweep Alert · personal project · not affiliated with Tesla or the City of San Francisco</span>
+  <span><a href="privacy.html">Privacy</a> · Schedule data: <a href="https://data.sfgov.org/d/yhqp-riqs">DataSF</a></span>
+</div></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const API = "https://data.sfgov.org/resource/yhqp-riqs.json";
+const $ = id => document.getElementById(id);
+
+// ---- vehicle status: filled by status.json once the Tesla connection is live ----
+fetch("status.json", {cache: "no-store"}).then(r => r.ok ? r.json() : null).then(s => {
+  if (!s) return;
+  $("car-dot").classList.add("live");
+  $("car-title").textContent = s.alert ? "Move your car" : "Parked, no sweeping tomorrow";
+  $("car-sub").textContent = s.message || "";
+  $("car-street").textContent = s.street || "—";
+  $("car-side").textContent = s.side || "—";
+  $("car-next").textContent = s.next_sweep || "—";
+  $("car-checked").textContent = s.checked_at ? new Date(s.checked_at).toLocaleString() : "—";
+}).catch(() => {});
+
+// ---- holidays (US federal + day after Thanksgiving, observed dates) ----
+function nthWeekday(y, m, wd, n) { const d = new Date(y, m, 1); d.setDate(1 + (wd - d.getDay() + 7) % 7 + (n - 1) * 7); return d; }
+function lastWeekday(y, m, wd) { const d = new Date(y, m + 1, 0); d.setDate(d.getDate() - (d.getDay() - wd + 7) % 7); return d; }
+function observed(d) { const w = d.getDay(); if (w === 6) d.setDate(d.getDate() - 1); if (w === 0) d.setDate(d.getDate() + 1); return d; }
+const holCache = {};
+function holidays(y) {
+  if (holCache[y]) return holCache[y];
+  const tg = nthWeekday(y, 10, 4, 4), dat = new Date(tg); dat.setDate(dat.getDate() + 1);
+  const list = [observed(new Date(y,0,1)), nthWeekday(y,0,1,3), nthWeekday(y,1,1,3), lastWeekday(y,4,1),
+    observed(new Date(y,5,19)), observed(new Date(y,6,4)), nthWeekday(y,8,1,1), nthWeekday(y,9,1,2),
+    observed(new Date(y,10,11)), tg, dat, observed(new Date(y,11,25))];
+  return holCache[y] = new Set(list.map(d => d.toDateString()));
+}
+const WD = ["su","mo","tu","we","th","fr","sa"];
+function sweepsOn(r, d) {
+  const hol = holidays(d.getFullYear()).has(d.toDateString());
+  const wd = (r.weekday || "").toLowerCase();
+  if (wd.startsWith("hol")) return hol;
+  if (!wd.startsWith(WD[d.getDay()])) return false;
+  if (hol && r.holidays !== "1") return false;
+  return r["week" + (Math.floor((d.getDate() - 1) / 7) + 1)] === "1";
+}
+function nextSweep(rows) {
+  const d = new Date(); d.setHours(0,0,0,0);
+  for (let i = 0; i < 70; i++, d.setDate(d.getDate() + 1)) {
+    const hit = rows.find(r => sweepsOn(r, d));
+    if (hit) return {date: new Date(d), row: hit, days: i};
+  }
+  return null;
+}
+const hr = h => { h = +h; return ((h % 12) || 12) + (h % 24 < 12 ? "am" : "pm"); };
+
+// ---- geometry ----
+function toXY(lat0, lon0, lat, lon) { return [(lon - lon0) * 111320 * Math.cos(lat0 * Math.PI / 180), (lat - lat0) * 110574]; }
+function nearest(lat, lon, rows) {
+  let best = null; const seen = new Set();
+  for (const r of rows) {
+    if (seen.has(r.cnn)) continue; seen.add(r.cnn);
+    let c = r.line.coordinates; if (typeof c === "string") c = JSON.parse(c);
+    const p = c.map(([x, y]) => toXY(lat, lon, y, x));
+    for (let i = 0; i < p.length - 1; i++) {
+      const [ax, ay] = p[i], [bx, by] = p[i + 1], dx = bx - ax, dy = by - ay, s2 = dx*dx + dy*dy;
+      if (!s2) continue;
+      const t = Math.max(0, Math.min(1, (-ax*dx - ay*dy) / s2));
+      const dist = Math.hypot(ax + t*dx, ay + t*dy), cross = dx * -ay - dy * -ax;
+      if (!best || dist < best.dist) best = {dist, side: cross > 0 ? "L" : "R", row: r, coords: c};
+    }
+  }
+  return best && best.dist < 25 ? best : null;
+}
+
+// ---- map ----
+const map = L.map("map").setView([37.7749, -122.4194], 14);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "&copy; OpenStreetMap"}).addTo(map);
+let marker, lineLayer;
+
+async function lookup(lat, lon) {
+  $("result").innerHTML = '<p class="muted">Checking the city schedule…</p>';
+  if (marker) marker.remove(); marker = L.marker([lat, lon]).addTo(map);
+  const dLat = 40 / 110574, dLon = 40 / (111320 * Math.cos(lat * Math.PI / 180));
+  const where = `within_box(line, ${lat + dLat}, ${lon - dLon}, ${lat - dLat}, ${lon + dLon})`;
+  let rows;
+  try { rows = await (await fetch(`${API}?$limit=500&$where=${encodeURIComponent(where)}`)).json(); }
+  catch { $("result").innerHTML = '<p class="muted">Couldn’t reach DataSF. Try again in a moment.</p>'; return; }
+  const hit = nearest(lat, lon, rows);
+  if (lineLayer) lineLayer.remove();
+  if (!hit) { $("result").innerHTML = '<p class="muted">No posted street sweeping on a block here. Tap closer to the curb, or this spot isn’t swept.</p>'; return; }
+  lineLayer = L.polyline(hit.coords.map(([x, y]) => [y, x]), {color: getComputedStyle(document.documentElement).getPropertyValue("--accent"), weight: 6}).addTo(map);
+  const block = rows.filter(r => r.cnn === hit.row.cnn);
+  const html = ["L", "R"].map(s => {
+    const rs = block.filter(r => r.cnnrightleft === s);
+    if (!rs.length) return "";
+    const name = rs[0].blockside || (s === "L" ? "Left" : "Right");
+    const nx = nextSweep(rs), here = s === hit.side, soon = nx && nx.days <= 1;
+    const when = nx ? `${nx.date.toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"})}, ${hr(nx.row.fromhour)}–${hr(nx.row.tohour)}` : "none in the next 10 weeks";
+    const sched = [...new Set(rs.map(r => `${r.fullname}, ${hr(r.fromhour)}–${hr(r.tohour)}`))];
+    return `<div class="side ${here ? "here" : ""} ${here && soon ? "warn" : ""}">
+      <h3><span>${name} side</span>${here ? '<span class="pill">you tapped here</span>' : ""}</h3>
+      <div class="next">Next sweep: <b>${when}</b>${nx && nx.days === 0 ? " (today)" : nx && nx.days === 1 ? " (tomorrow)" : ""}</div>
+      <ul>${sched.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
+  }).join("");
+  $("result").innerHTML = `<p style="margin:0"><b>${hit.row.corridor}</b> <span class="muted">${hit.row.limits}</span></p>${html}`;
+}
+map.on("click", e => lookup(e.latlng.lat, e.latlng.lng));
+$("locate").onclick = () => {
+  if (!navigator.geolocation) return;
+  $("hint").textContent = "Locating…";
+  navigator.geolocation.getCurrentPosition(p => {
+    $("hint").textContent = "";
+    map.setView([p.coords.latitude, p.coords.longitude], 18);
+    lookup(p.coords.latitude, p.coords.longitude);
+  }, () => $("hint").textContent = "Location permission denied. Tap the map instead.");
+};
+</script>
+</body>
+</html>
