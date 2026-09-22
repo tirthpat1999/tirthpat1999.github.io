@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Sweep Alert</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14161a;--muted:#5d6470;--line:#e3e6eb;--accent:#2f6fed}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1013;--card:#171a1f;--ink:#eef0f3;--muted:#9aa2ad;--line:#2a2f37;--accent:#5b8dff}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:40px 16px}
+a{color:var(--accent)}h1{letter-spacing:-.02em}h2{font-size:18px;margin-top:28px}p,li{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<p><a href="./">← Sweep Alert</a></p>
+<h1>Privacy</h1>
+<p>Sweep Alert is a personal, single-user project. It is not a commercial service and is not affiliated with Tesla or the City of San Francisco.</p>
+<h2>What it accesses</h2>
+<ul>
+<li>Vehicle location and heading, through Tesla's official Fleet API, with read-only scopes (vehicle information and location). It cannot send commands to the car.</li>
+<li>Public street-sweeping schedules from DataSF.</li>
+</ul>
+<h2>What it stores</h2>
+<p>Only an OAuth refresh token, kept as an encrypted GitHub Actions secret. Location is used during the nightly check and is not stored, logged or shared with third parties.</p>
+<h2>Notifications</h2>
+<p>Alerts are sent through ntfy to a private topic.</p>
+<h2>Revoking access</h2>
+<p>Access can be revoked at any time from the Tesla account's third-party app settings.</p>
+<p style="margin-top:40px;font-size:14px">Last updated September 2026.</p>
+</main>
+</body>
+</html>
