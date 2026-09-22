@@ -11,6 +11,7 @@
 :root{--bg:#f6f7f9;--card:#fff;--ink:#14161a;--muted:#5d6470;--line:#e3e6eb;--accent:#2f6fed;--warn:#d9480f;--warn-bg:#fff1e8;--ok:#2b8a3e;--ok-bg:#ebf8ee;--radius:14px}
 @media (prefers-color-scheme:dark){:root{--bg:#0e1013;--card:#171a1f;--ink:#eef0f3;--muted:#9aa2ad;--line:#2a2f37;--accent:#5b8dff;--warn:#ff8a4c;--warn-bg:#2d1a10;--ok:#51cf66;--ok-bg:#12261a}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
 a{color:var(--accent)}
 .wrap{max-width:1040px;margin:0 auto;padding:0 16px}
@@ -51,6 +52,14 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .next{font-size:14px;margin-top:6px}
 .next b{color:var(--warn)}
 .side:not(.warn) .next b{color:var(--ok)}
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);font-size:13px;text-transform:none;letter-spacing:0}
+.unlock{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center}
+.unlock input[type=password]{flex:1 1 180px;min-width:0;font:inherit;font-size:15px;padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.remember{display:flex;gap:6px;align-items:center;flex-basis:100%}
+.unlock p{flex-basis:100%;margin:0}
+.dot.alert{background:var(--warn);box-shadow:0 0 0 4px var(--warn-bg)}
+.mini{font-size:13px;margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.mini b{font-weight:600}
 footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0;color:var(--muted);font-size:14px}
 footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 </style>
@@ -68,21 +77,33 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
   </section>
 
   <div class="grid" id="status">
-    <section class="card">
-      <h2>Vehicle</h2>
+    <section class="card" id="vehicle">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">Vehicle <button id="lock" class="linkbtn" hidden>Lock</button></h2>
       <div class="status">
         <span class="dot" id="car-dot"></span>
         <div>
-          <p class="big" id="car-title">Waiting for vehicle connection</p>
-          <p class="muted" id="car-sub">Live parking location will appear here once the Tesla Fleet API is authorized.</p>
+          <p class="big" id="car-title">🔒 Private</p>
+          <p class="muted" id="car-sub">Parking details are encrypted. Only the owner's passphrase can unlock them.</p>
         </div>
       </div>
-      <dl class="kv">
-        <dt>Parked on</dt><dd id="car-street">—</dd>
-        <dt>Side</dt><dd id="car-side">—</dd>
-        <dt>Next sweep</dt><dd id="car-next">—</dd>
-        <dt>Last check</dt><dd id="car-checked">—</dd>
-      </dl>
+      <form id="unlock" class="unlock">
+        <input id="pass" type="password" autocomplete="current-password" placeholder="Passphrase" aria-label="Passphrase" required>
+        <button class="primary" type="submit">Unlock</button>
+        <label class="muted remember"><input type="checkbox" id="remember" checked> Remember on this device</label>
+        <p class="muted" id="unlock-msg" role="status"></p>
+      </form>
+      <div id="car-details" hidden>
+        <dl class="kv">
+          <dt>Car</dt><dd id="car-name">—</dd>
+          <dt>Parked on</dt><dd id="car-street">—</dd>
+          <dt>Side</dt><dd id="car-side">—</dd>
+          <dt>Next sweep</dt><dd id="car-next">—</dd>
+          <dt>Location fix</dt><dd id="car-fix">—</dd>
+          <dt>Last check</dt><dd id="car-checked">—</dd>
+        </dl>
+        <div id="car-sides"></div>
+        <p style="margin:14px 0 0"><a id="car-map" target="_blank" rel="noopener">Open in Google Maps →</a></p>
+      </div>
     </section>
     <section class="card">
       <h2>Alerts</h2>
@@ -132,18 +153,6 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 <script>
 const API = "https://data.sf.gov/resource/yhqp-riqs.json";
 const $ = id => document.getElementById(id);
-
-// ---- vehicle status: filled by status.json once the Tesla connection is live ----
-fetch("status.json", {cache: "no-store"}).then(r => r.ok ? r.json() : null).then(s => {
-  if (!s) return;
-  $("car-dot").classList.add("live");
-  $("car-title").textContent = s.alert ? "Move your car" : "Parked, no sweeping tomorrow";
-  $("car-sub").textContent = s.message || "";
-  $("car-street").textContent = s.street || "—";
-  $("car-side").textContent = s.side || "—";
-  $("car-next").textContent = s.next_sweep || "—";
-  $("car-checked").textContent = s.checked_at ? new Date(s.checked_at).toLocaleString() : "—";
-}).catch(() => {});
 
 // ---- holidays (US federal + day after Thanksgiving, observed dates) ----
 function nthWeekday(y, m, wd, n) { const d = new Date(y, m, 1); d.setDate(1 + (wd - d.getDay() + 7) % 7 + (n - 1) * 7); return d; }
@@ -197,13 +206,14 @@ function nearest(lat, lon, rows) {
 }
 
 // ---- map ----
-const map = L.map("map").setView([37.7749, -122.4194], 14);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "&copy; OpenStreetMap"}).addTo(map);
+const HAS_MAP = typeof L !== "undefined";  // page still works if the map library fails to load
+const map = HAS_MAP ? L.map("map").setView([37.7749, -122.4194], 14) : null;
+if (HAS_MAP) L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "&copy; OpenStreetMap"}).addTo(map);
 let marker, lineLayer;
 
 async function lookup(lat, lon) {
   $("result").innerHTML = '<p class="muted">Checking the city schedule…</p>';
-  if (marker) marker.remove(); marker = L.marker([lat, lon]).addTo(map);
+  if (HAS_MAP) { if (marker) marker.remove(); marker = L.marker([lat, lon]).addTo(map); }
   const dLat = 40 / 110574, dLon = 40 / (111320 * Math.cos(lat * Math.PI / 180));
   const n = lat + dLat, s = lat - dLat, w = lon - dLon, e = lon + dLon;
   const where = `intersects(line, 'POLYGON((${w} ${n},${e} ${n},${e} ${s},${w} ${s},${w} ${n}))')`;
@@ -213,7 +223,7 @@ async function lookup(lat, lon) {
   const hit = nearest(lat, lon, rows);
   if (lineLayer) lineLayer.remove();
   if (!hit) { $("result").innerHTML = '<p class="muted">No posted street sweeping on a block here. Tap closer to the curb, or this spot isn’t swept.</p>'; return; }
-  lineLayer = L.polyline(hit.coords.map(([x, y]) => [y, x]), {color: getComputedStyle(document.documentElement).getPropertyValue("--accent"), weight: 6}).addTo(map);
+  if (HAS_MAP) lineLayer = L.polyline(hit.coords.map(([x, y]) => [y, x]), {color: getComputedStyle(document.documentElement).getPropertyValue("--accent"), weight: 6}).addTo(map);
   const block = rows.filter(r => r.cnn === hit.row.cnn);
   const html = ["L", "R"].map(s => {
     const rs = block.filter(r => r.cnnrightleft === s);
@@ -229,16 +239,78 @@ async function lookup(lat, lon) {
   }).join("");
   $("result").innerHTML = `<p style="margin:0"><b>${hit.row.corridor}</b> <span class="muted">${hit.row.limits}</span></p>${html}`;
 }
-map.on("click", e => lookup(e.latlng.lat, e.latlng.lng));
+if (HAS_MAP) map.on("click", e => lookup(e.latlng.lat, e.latlng.lng));
 $("locate").onclick = () => {
   if (!navigator.geolocation) return;
   $("hint").textContent = "Locating…";
   navigator.geolocation.getCurrentPosition(p => {
     $("hint").textContent = "";
-    map.setView([p.coords.latitude, p.coords.longitude], 18);
+    if (HAS_MAP) map.setView([p.coords.latitude, p.coords.longitude], 18);
     lookup(p.coords.latitude, p.coords.longitude);
   }, () => $("hint").textContent = "Location permission denied. Tap the map instead.");
 };
+
+// ---- private vehicle status: encrypted by the nightly job, decrypted only in your browser ----
+const KEY_STORE = "sweepalert.pass";
+const b64 = x => Uint8Array.from(atob(x), c => c.charCodeAt(0));
+const esc = x => String(x ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let encStatus = null, carMarker = null;
+
+async function decryptStatus(enc, pass) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({name: "PBKDF2", hash: "SHA-256", salt: b64(enc.salt), iterations: enc.iter},
+    base, {name: "AES-GCM", length: 256}, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: b64(enc.iv)}, key, b64(enc.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+function showStatus(s) {
+  $("unlock").hidden = true; $("car-details").hidden = false; $("lock").hidden = false;
+  $("car-dot").className = "dot " + (s.alert ? "alert" : "live");
+  $("car-title").textContent = s.status || "Status";
+  $("car-sub").textContent = s.detail || "";
+  $("car-name").textContent = s.car || "—";
+  $("car-street").textContent = s.street ? `${s.street} (${s.limits})` : "Not on a swept SF street";
+  $("car-side").textContent = s.side ? s.side + (s.side_confident === false ? " (uncertain)" : "") : "—";
+  $("car-next").textContent = s.next_sweep || "—";
+  $("car-fix").textContent = s.fix_age || "—";
+  $("car-checked").textContent = s.checked_at ? new Date(s.checked_at).toLocaleString([], {weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}) : "—";
+  $("car-map").href = `https://maps.google.com/?q=${s.lat},${s.lon}`;
+  $("car-sides").innerHTML = [s.your_side && ["Your side", s.your_side], s.other_side && ["Other side", s.other_side]]
+    .filter(Boolean).map(([label, x]) => `<div class="mini"><b>${label} (${esc(x.name)})</b> · next: ${esc(x.next || "none soon")}<br><span class="muted">${x.rules.map(esc).join(" · ")}</span></div>`).join("");
+  if (HAS_MAP) {
+  if (carMarker) carMarker.remove();
+  carMarker = L.circleMarker([s.lat, s.lon], {radius: 9, color: "#fff", weight: 3, fillColor: s.alert ? "#d9480f" : "#2b8a3e", fillOpacity: 1})
+    .addTo(map).bindTooltip("Your car");
+  map.setView([s.lat, s.lon], 17);
+  }
+  lookup(s.lat, s.lon);
+}
+
+async function tryUnlock(pass, remember) {
+  if (!encStatus) { $("unlock-msg").textContent = "No status published yet. It appears after the next nightly check."; return false; }
+  try {
+    showStatus(await decryptStatus(encStatus, pass));
+    try { remember ? localStorage.setItem(KEY_STORE, pass) : localStorage.removeItem(KEY_STORE); } catch {}
+    return true;
+  } catch { $("unlock-msg").textContent = "Wrong passphrase."; return false; }
+}
+
+$("unlock").onsubmit = e => { e.preventDefault(); $("unlock-msg").textContent = "Unlocking…"; tryUnlock($("pass").value, $("remember").checked); };
+$("lock").onclick = () => {
+  try { localStorage.removeItem(KEY_STORE); } catch {}
+  location.hash = ""; location.reload();
+};
+
+(async () => {
+  try { const r = await fetch("status.enc.json", {cache: "no-store"}); if (r.ok) encStatus = await r.json(); } catch {}
+  // One-tap unlock link: https://…/#key=PASSPHRASE (the part after # never leaves your browser)
+  const m = location.hash.match(/key=([^&]+)/);
+  let saved = null; try { saved = localStorage.getItem(KEY_STORE); } catch {}
+  const pass = m ? decodeURIComponent(m[1]) : saved;
+  if (m) history.replaceState(null, "", location.pathname);
+  if (pass) await tryUnlock(pass, true);
+})();
 </script>
 </body>
 </html>

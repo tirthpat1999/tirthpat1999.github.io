@@ -23,7 +23,7 @@ a{color:var(--accent)}h1{letter-spacing:-.02em}h2{font-size:18px;margin-top:28px
 <li>Public street-sweeping schedules from DataSF.</li>
 </ul>
 <h2>What it stores</h2>
-<p>Only an OAuth refresh token, kept as an encrypted GitHub Actions secret. Location is used during the nightly check and is not stored, logged or shared with third parties.</p>
+<p>An OAuth refresh token, kept as an encrypted GitHub Actions secret. After each nightly check, the latest parking status (location, street, side and schedule) is published on this site <b>encrypted</b> with AES-256-GCM, using a key derived from the owner's passphrase. It is decrypted only in the owner's browser; the passphrase is never sent to any server. If “Remember on this device” is ticked, it is kept only in that browser. Nothing is shared with third parties.</p>
 <h2>Notifications</h2>
 <p>Alerts are sent through ntfy to a private topic.</p>
 <h2>Revoking access</h2>
