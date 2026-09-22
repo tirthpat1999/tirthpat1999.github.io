@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Connected · Sweep Alert</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14161a;--muted:#5d6470;--line:#e3e6eb;--accent:#2f6fed;--ok:#2b8a3e}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1013;--card:#171a1f;--ink:#eef0f3;--muted:#9aa2ad;--line:#2a2f37;--accent:#5b8dff;--ok:#51cf66}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+main{max-width:620px;margin:0 auto;padding:48px 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px}
+h1{margin:0 0 8px;letter-spacing:-.02em}p{color:var(--muted)}
+code{display:block;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:14px;margin:12px 0}
+button{font:inherit;font-weight:600;background:var(--accent);color:#fff;border:0;padding:10px 16px;border-radius:9px;cursor:pointer}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main><div class="card">
+  <h1 id="h">Tesla connected</h1>
+  <p id="p">Copy this one-time code and paste it into the <b>Tesla setup</b> GitHub workflow (step: exchange). It expires in a few minutes and only works once.</p>
+  <code id="code">—</code>
+  <button id="copy">Copy code</button>
+  <p style="margin-top:24px;font-size:14px"><a href="./">← Sweep Alert</a></p>
+</div></main>
+<script>
+const q = new URLSearchParams(location.search), code = q.get("code"), err = q.get("error");
+if (code) document.getElementById("code").textContent = code;
+if (err || !code) {
+  document.getElementById("h").textContent = err ? "Connection not completed" : "No code found";
+  document.getElementById("p").textContent = err ? (q.get("error_description") || err) : "Open this page by signing in to Tesla from the Sweep Alert setup link.";
+  document.getElementById("copy").style.display = "none";
+}
+document.getElementById("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(code); document.getElementById("copy").textContent = "Copied"; } catch {}
+};
+</script>
+</body>
+</html>
