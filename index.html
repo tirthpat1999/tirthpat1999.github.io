@@ -264,10 +264,38 @@ async function decryptStatus(enc, pass) {
   return JSON.parse(new TextDecoder().decode(pt));
 }
 
+// "Thu Oct 01, 9am–11am" -> {start, end} as Dates (year taken from when the status was written)
+function parseSweep(str, refIso) {
+  const m = /^\w{3} (\w{3}) (\d{1,2}), (\d{1,2})(am|pm)\D+(\d{1,2})(am|pm)/.exec(str || "");
+  if (!m) return null;
+  const ref = refIso ? new Date(refIso) : new Date();
+  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].indexOf(m[1]);
+  const h24 = (h, ap) => (+h % 12) + (ap === "pm" ? 12 : 0);
+  let year = ref.getFullYear(); if (mon < ref.getMonth() - 6) year++;   // Dec -> Jan rollover
+  const start = new Date(year, mon, +m[2], h24(m[3], m[4]));
+  const end = new Date(year, mon, +m[2], h24(m[5], m[6])); if (end <= start) end.setDate(end.getDate() + 1);
+  return {start, end};
+}
+
+// Headline worked out from the sweep time and the time you're looking at the page
+function liveHeadline(s) {
+  const w = parseSweep(s.next_sweep, s.checked_at), now = new Date();
+  if (!w) return {title: s.status || "Status", alert: !!s.alert};
+  const day0 = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const days = Math.round((day0(w.start) - day0(now)) / 864e5);
+  const when = days === 0 ? "today" : days === 1 ? "tomorrow" : w.start.toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"});
+  const time = hr(w.start.getHours());
+  if (now >= w.start && now < w.end) return {title: `🚨 Sweeping now – move your car (until ${hr(w.end.getHours())})`, alert: true};
+  if (now < w.start && days <= 1) return {title: `🚨 Move your car by ${time} ${when}`, alert: true};
+  if (now < w.start) return {title: `✅ You're good until ${when}, ${time}`, alert: false};
+  return {title: "⚠️ Status is out of date – waiting for the next check", alert: false};
+}
+
 function showStatus(s) {
   $("unlock").hidden = true; $("car-details").hidden = false; $("lock").hidden = false;
-  $("car-dot").className = "dot " + (s.alert ? "alert" : "live");
-  $("car-title").textContent = s.status || "Status";
+  const head = liveHeadline(s);
+  $("car-dot").className = "dot " + (head.alert ? "alert" : "live");
+  $("car-title").textContent = head.title;
   $("car-sub").textContent = s.detail || "";
   $("car-name").textContent = s.car || "—";
   $("car-street").textContent = s.street ? `${s.street} (${s.limits})` : "Not on a swept SF street";
@@ -280,7 +308,7 @@ function showStatus(s) {
     .filter(Boolean).map(([label, x]) => `<div class="mini"><b>${label} (${esc(x.name)})</b> · next: ${esc(x.next || "none soon")}<br><span class="muted">${x.rules.map(esc).join(" · ")}</span></div>`).join("");
   if (HAS_MAP) {
   if (carMarker) carMarker.remove();
-  carMarker = L.circleMarker([s.lat, s.lon], {radius: 9, color: "#fff", weight: 3, fillColor: s.alert ? "#d9480f" : "#2b8a3e", fillOpacity: 1})
+  carMarker = L.circleMarker([s.lat, s.lon], {radius: 9, color: "#fff", weight: 3, fillColor: liveHeadline(s).alert ? "#d9480f" : "#2b8a3e", fillOpacity: 1})
     .addTo(map).bindTooltip("Your car");
   map.setView([s.lat, s.lon], 17);
   }
